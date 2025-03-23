@@ -39,13 +39,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    if (redisKeyService.getPublicKey() == null) {
+    if (!redisKeyService.isKeysLoaded()) {
       throw new PublicKeyException("Public key is not available");
     }
     String requestURI = request.getRequestURI();
     String token = null;
     boolean isValidToken = false;
-    if (requestURI.equals("/api/auth/refresh-token")) {
+    if (requestURI.equals("/api/credential/refresh-token")) {
       token = extractTokenFromCookies(request, "refreshToken");
       isValidToken = token != null && jwtService.isRefreshTokenValid(token);
     } else {
@@ -62,9 +62,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
     logger.info("Token: {}", token);
     CustomUserDetails userDetails = jwtService.getUserDetails(token);
-    if (blackListService.isUserBlackListed(userDetails.getId())) {
-      throw new AccessDeniedException("User is disabled");
+    if (blackListService.isUserInBlackList(userDetails.getId())) {
+      throw new AccessDeniedException("You are not allowed to access this resource");
     }
+    logger.info("User details: {}", userDetails);
     setAuthentication(userDetails);
 
     chain.doFilter(request, response);

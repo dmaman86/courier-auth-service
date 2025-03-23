@@ -13,10 +13,10 @@ import com.courier.authservice.exception.BusinessException;
 import com.courier.authservice.exception.EntityExistsException;
 import com.courier.authservice.exception.EntityNotFoundException;
 import com.courier.authservice.feignclient.UserServiceClient;
-import com.courier.authservice.objects.dto.SetPasswordDto;
-import com.courier.authservice.objects.dto.UpdatePasswordDto;
 import com.courier.authservice.objects.dto.UserDto;
 import com.courier.authservice.objects.entity.UserCredential;
+import com.courier.authservice.objects.request.SignUpRequest;
+import com.courier.authservice.objects.request.UpdateUserCredential;
 import com.courier.authservice.repository.RefreshTokenRepository;
 import com.courier.authservice.repository.UserCredentialRepository;
 import com.courier.authservice.service.RedisKeyService;
@@ -38,6 +38,26 @@ public class UserCredentialServiceImpl implements UserCredentialService {
   @Autowired private RefreshTokenRepository refreshTokenRepository;
 
   @Override
+  @Transactional(readOnly = true)
+  public Optional<UserCredential> getUserCredential(Long userId) {
+    return userCredentialRepository.findByUserId(userId);
+  }
+
+  @Override
+  @Transactional
+  public UserCredential createUser(UserDto userDto) {
+    if (userCredentialRepository.existsByUserId(userDto.getId())) {
+      throw new EntityExistsException(
+          "User credential already exists for user id: " + userDto.getId());
+    }
+
+    UserCredential userCredential =
+        UserCredential.builder().userId(userDto.getId()).password(null).build();
+
+    return userCredentialRepository.save(userCredential);
+  }
+
+  @Override
   @Transactional
   public void createUserCredential(UserDto userDto) {
     if (userCredentialRepository.existsByUserId(userDto.getId())) {
@@ -53,7 +73,7 @@ public class UserCredentialServiceImpl implements UserCredentialService {
 
   @Override
   @Transactional
-  public void setPassword(SetPasswordDto setPasswordDto) {
+  public void signup(SignUpRequest signUpRequest) {
 
     String apiKey = redisKeyService.getAuthServiceSecret();
     if (apiKey == null) {
@@ -62,7 +82,7 @@ public class UserCredentialServiceImpl implements UserCredentialService {
 
     UserDto userDto =
         userServiceClient.getUserByEmailOrPhone(
-            setPasswordDto.getEmail(), setPasswordDto.getPhoneNumber(), apiKey);
+            signUpRequest.getEmail(), signUpRequest.getPhoneNumber(), apiKey);
     if (userDto == null || userDto.getId() == null) {
       throw new EntityNotFoundException("User not found");
     }
@@ -76,7 +96,7 @@ public class UserCredentialServiceImpl implements UserCredentialService {
 
     UserCredential userCredential =
         userCredentialOptional.orElseGet(() -> createUserCredential(userDto.getId()));
-    userCredential.setPassword(passwordEncoder.encode(setPasswordDto.getPassword()));
+    userCredential.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
     userCredential.setEnabled(true);
 
     userCredentialRepository.save(userCredential);
@@ -90,18 +110,21 @@ public class UserCredentialServiceImpl implements UserCredentialService {
 
   @Override
   @Transactional
-  public void updatePassword(UpdatePasswordDto updatePasswordDto) {
+  public void updateCredential(UpdateUserCredential updateUserCredential) {
     UserCredential userCredential =
         userCredentialRepository
-            .findByUserId(updatePasswordDto.getUserId())
+            .findByUserId(updateUserCredential.getUserId())
             .orElseThrow(() -> new EntityNotFoundException("User credential not found"));
 
+    logger.info("Raw password received: {}", updateUserCredential.getCurrentPassword());
+    logger.info("Encoded password from DB: {}", userCredential.getPassword());
+
     if (!passwordEncoder.matches(
-        updatePasswordDto.getCurrentPassword(), userCredential.getPassword())) {
+        updateUserCredential.getCurrentPassword(), userCredential.getPassword())) {
       throw new BusinessException("Current password is incorrect");
     }
 
-    userCredential.setPassword(passwordEncoder.encode(updatePasswordDto.getNewPassword()));
+    userCredential.setPassword(passwordEncoder.encode(updateUserCredential.getNewPassword()));
     userCredentialRepository.save(userCredential);
   }
 

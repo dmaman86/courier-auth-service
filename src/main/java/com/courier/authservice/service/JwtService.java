@@ -10,7 +10,7 @@ public interface JwtService {
 
   boolean isRefreshTokenValid(String token);
 
-  String generateToken(CustomUserDetails userDetails, long expirationTime);
+  String generateToken(CustomUserDetails userDetails, long expirationTime, String userAgent);
 
   long getAccessTokenExpirationTime();
 
@@ -19,6 +19,8 @@ public interface JwtService {
   CustomUserDetails getUserDetails(String token);
 
   void deleteUserToken(Long userId);
+
+  void saveRefreshToken(String token, Long userId);
 
   Date extractExpiration(String token);
 }

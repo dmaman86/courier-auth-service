@@ -1,22 +1,20 @@
 package com.courier.authservice.service;
 
+import java.util.List;
+
 public interface RedisKeyService {
 
-  void setPublicKey(String publicKey);
-
-  void setPrivateKey(String privateKey);
-
-  void setAuthServiceSecret(String authServiceSecret);
+  void setKeys(String privateKey, String publicKey, String authServiceSecret);
 
   String getPublicKey();
 
-  String getPrivateKey();
+  String getPrivateKey(String publicKey);
 
   String getAuthServiceSecret();
 
-  boolean tryAcquire();
+  List<String> getPublicKeys();
 
-  void acquire();
+  boolean isKeysLoaded();
 
-  void release();
+  void resetKeys();
 }

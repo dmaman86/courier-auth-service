@@ -7,12 +7,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.courier.authservice.objects.dto.UserDto;
 
-@FeignClient(name = "courier-user-service", configuration = FeignConfig.class)
+@FeignClient(name = "courier-user-service")
 public interface UserServiceClient {
 
   @GetMapping("/api/user/find-by-email-or-phone")
   UserDto getUserByEmailOrPhone(
-      @RequestParam String email,
-      @RequestParam String phone,
+      @RequestParam(required = false) String email,
+      @RequestParam(required = false) String phoneNumber,
       @RequestHeader("X-Api-Key") String apiKey);
 }

@@ -16,7 +16,7 @@ import com.courier.authservice.config.filters.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity
 public class SecurityConfig {
 
   @Autowired private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -31,12 +31,12 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             request ->
                 request
-                    .requestMatchers("/api/auth/login", "/api/auth/set-password")
+                    .requestMatchers("/api/auth/signin", "/api/auth/signup")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        .addFilterBefore(exceptionHandlerFilter, JwtAuthenticationFilter.class)
-        .addFilterAfter(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        .addFilterBefore(exceptionHandlerFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(jwtAuthenticationFilter, ExceptionHandlerFilter.class);
 
     return http.build();
   }

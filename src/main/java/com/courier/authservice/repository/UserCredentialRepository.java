@@ -10,5 +10,7 @@ public interface UserCredentialRepository extends JpaRepository<UserCredential, 
 
   Optional<UserCredential> findByUserId(Long userId);
 
+  Optional<UserCredential> findByUserIdAndEnabledTrue(Long userId);
+
   boolean existsByUserId(Long userId);
 }

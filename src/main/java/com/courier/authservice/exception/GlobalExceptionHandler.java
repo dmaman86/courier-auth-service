@@ -1,6 +1,7 @@
 package com.courier.authservice.exception;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -71,11 +73,18 @@ public class GlobalExceptionHandler {
     return reportError(ex, ErrorSeverity.MEDIUM, HttpStatus.BAD_REQUEST, request);
   }
 
+  @ExceptionHandler(BadCredentialsException.class)
+  public ResponseEntity<ErrorLogDto> handleBadCredentialsException(
+      BadCredentialsException ex, WebRequest request) {
+    return reportError(ex, ErrorSeverity.MEDIUM, HttpStatus.UNAUTHORIZED, request);
+  }
+
   private ResponseEntity<ErrorLogDto> reportError(
       Exception ex, ErrorSeverity severity, HttpStatus status, WebRequest request) {
     ErrorLogDto errorLog =
         ErrorLogDto.builder()
-            .timestamp(LocalDateTime.now())
+            .timestamp(
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
             .status(status.value())
             .error(status.getReasonPhrase())
             .message(ex.getMessage())

@@ -1,18 +1,21 @@
 package com.courier.authservice.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.courier.authservice.objects.dto.AuthResponse;
-import com.courier.authservice.objects.dto.LoginDto;
-import com.courier.authservice.objects.dto.SetPasswordDto;
+import com.courier.authservice.objects.dto.UserDto;
+import com.courier.authservice.objects.request.SignInRequest;
+import com.courier.authservice.objects.request.SignUpRequest;
+import com.courier.authservice.objects.response.AuthResponse;
 import com.courier.authservice.service.AuthService;
 import com.courier.authservice.service.UserCredentialService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
@@ -23,16 +26,22 @@ public class AuthController {
 
   @Autowired private UserCredentialService userCredentialService;
 
-  @PostMapping("/login")
-  public ResponseEntity<Void> login(@RequestBody LoginDto loginDto, HttpServletResponse response) {
-    AuthResponse authResponse = authService.login(loginDto);
+  @PostMapping("/signin")
+  public ResponseEntity<UserDto> signin(
+      @RequestBody SignInRequest signInRequest,
+      HttpServletRequest request,
+      HttpServletResponse response) {
+
+    String userAgent = request.getHeader(HttpHeaders.USER_AGENT);
+
+    AuthResponse authResponse = authService.signin(signInRequest, userAgent);
     setAuthCookies(response, authResponse);
-    return ResponseEntity.noContent().build();
+    return ResponseEntity.ok(authResponse.getUser());
   }
 
-  @PostMapping("/set-password")
-  public ResponseEntity<Void> setUserPassword(@RequestBody SetPasswordDto setPasswordDto) {
-    userCredentialService.setPassword(setPasswordDto);
+  @PostMapping("/signup")
+  public ResponseEntity<Void> signup(@RequestBody SignUpRequest signUpRequest) {
+    userCredentialService.signup(signUpRequest);
     return ResponseEntity.noContent().build();
   }
 

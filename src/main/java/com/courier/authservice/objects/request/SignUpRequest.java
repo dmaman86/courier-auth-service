@@ -1,4 +1,4 @@
-package com.courier.authservice.objects.dto;
+package com.courier.authservice.objects.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpdatePasswordDto {
-  private Long userId;
-  private String currentPassword;
-  private String newPassword;
+public class SignUpRequest {
+  private String email;
+  private String phoneNumber;
+  private String password;
 }

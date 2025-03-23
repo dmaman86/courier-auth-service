@@ -7,6 +7,7 @@ import java.security.PublicKey;
 import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.ZoneId;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.courier.authservice.config.security.CustomUserDetails;
 import com.courier.authservice.exception.PublicKeyException;
+import com.courier.authservice.exception.TokenValidationException;
 import com.courier.authservice.objects.entity.RefreshToken;
 import com.courier.authservice.repository.RefreshTokenRepository;
 import com.courier.authservice.service.JwtService;
@@ -41,6 +43,7 @@ public class JwtServiceImpl implements JwtService {
   private static final Logger logger = LoggerFactory.getLogger(JwtServiceImpl.class);
 
   private static final long ACCESS_TOKEN_EXPIRATION = 15 * 60 * 1000; // 15 min
+  // private static final long ACCESS_TOKEN_EXPIRATION = 30 * 1000; // 30 sec
   private static final long REFRESH_TOKEN_EXPIRATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   @Autowired private RedisKeyService redisKeyService;
@@ -63,9 +66,12 @@ public class JwtServiceImpl implements JwtService {
   }
 
   @Override
-  public String generateToken(CustomUserDetails userDetails, long expirationTime) {
+  public String generateToken(
+      CustomUserDetails userDetails, long expirationTime, String userAgent) {
     try {
-      PrivateKey privateKey = convertToPrivateKey(redisKeyService.getPrivateKey());
+      String publicKey = redisKeyService.getPublicKey();
+      String privateKeyEncoded = redisKeyService.getPrivateKey(publicKey);
+      PrivateKey privateKey = convertToPrivateKey(privateKeyEncoded);
 
       Map<String, Object> claims =
           Map.of(
@@ -76,7 +82,8 @@ public class JwtServiceImpl implements JwtService {
               "roles",
                   userDetails.getAuthorities().stream()
                       .map(GrantedAuthority::getAuthority)
-                      .collect(Collectors.toList()));
+                      .collect(Collectors.toList()),
+              "userAgent", userAgent);
 
       return Jwts.builder()
           .setSubject(userDetails.getUsername())
@@ -127,6 +134,25 @@ public class JwtServiceImpl implements JwtService {
   }
 
   @Override
+  @Transactional
+  public void saveRefreshToken(String token, Long userId) {
+    if (refreshTokenRepository.existsByUserId(userId)) {
+      deleteUserToken(userId);
+    }
+
+    Date expirationDate = extractExpiration(token);
+
+    RefreshToken refreshToken =
+        RefreshToken.builder()
+            .token(token)
+            .userId(userId)
+            .expirationDate(
+                expirationDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
+            .build();
+    refreshTokenRepository.save(refreshToken);
+  }
+
+  @Override
   public Date extractExpiration(String token) {
     return extractClaim(token, Claims::getExpiration);
   }
@@ -137,11 +163,22 @@ public class JwtServiceImpl implements JwtService {
   }
 
   private Claims parseTokenClaims(String token) {
-    return Jwts.parserBuilder()
-        .setSigningKey(convertToPublicKey(redisKeyService.getPublicKey()))
-        .build()
-        .parseClaimsJws(token)
-        .getBody();
+    List<String> publicKeys = redisKeyService.getPublicKeys();
+
+    for (String publicKeyStr : publicKeys) {
+      try {
+        PublicKey publicKey = convertToPublicKey(publicKeyStr);
+        return Jwts.parserBuilder()
+            .setSigningKey(publicKey)
+            .build()
+            .parseClaimsJws(token)
+            .getBody();
+      } catch (Exception e) {
+        logger.warn("Signature failed with public key, trying next key...");
+      }
+    }
+    logger.error("No valid public key found to verify signature");
+    throw new TokenValidationException("Token could not be validated against active public keys");
   }
 
   private <T extends KeySpec, K extends Key> K convertToKey(

@@ -1,6 +1,7 @@
 package com.courier.authservice.service.impl;
 
-import java.util.concurrent.Semaphore;
+import java.util.Collections;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,8 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.courier.authservice.objects.dto.AuthInfoDto;
-import com.courier.authservice.service.EventProducerService;
 import com.courier.authservice.service.RedisKeyService;
 
 @Service
@@ -19,37 +18,38 @@ public class RedisKeyServiceImpl implements RedisKeyService {
 
   @Autowired private StringRedisTemplate redisTemplate;
 
-  @Autowired private EventProducerService eventProducerService;
-
-  private final Semaphore semaphore = new Semaphore(1);
-
-  private static final String PUBLIC_KEY_KEY = "publicKey";
-  private static final String PRIVATE_KEY_KEY = "privateKey";
-  private static final String AUTH_SECRET_KEY = "authServiceSecret";
+  private static final String LATEST_PUBLIC_KEY = "RSA_KEYS:latest_public_key";
+  private static final String PUBLIC_KEYS_LIST = "RSA_KEYS:public_keys_list";
+  private static final String PRIVATE_KEYS_MAP = "RSA_KEYS:private_keys_map";
+  private static final String AUTH_SECRET_KEY = "RSA_KEYS:auth_service_secret";
+  private static final int MAX_KEYS = 6;
 
   @Override
-  public void setPublicKey(String publicKey) {
-    redisTemplate.opsForValue().set(PUBLIC_KEY_KEY, publicKey);
-  }
+  public void setKeys(String privateKey, String publicKey, String authServiceSecret) {
+    logger.info(
+        "Getting keys from redis, public key: {}, auth service secret: {}",
+        publicKey,
+        authServiceSecret);
 
-  @Override
-  public void setPrivateKey(String privateKey) {
-    redisTemplate.opsForValue().set(PRIVATE_KEY_KEY, privateKey);
-  }
+    redisTemplate.opsForValue().set(LATEST_PUBLIC_KEY, publicKey);
 
-  @Override
-  public void setAuthServiceSecret(String authServiceSecret) {
+    redisTemplate.opsForList().rightPush(PUBLIC_KEYS_LIST, publicKey);
+
+    redisTemplate.opsForHash().put(PRIVATE_KEYS_MAP, publicKey, privateKey);
+
     redisTemplate.opsForValue().set(AUTH_SECRET_KEY, authServiceSecret);
+
+    trimOldKeys();
+  }
+
+  @Override
+  public boolean isKeysLoaded() {
+    return getPublicKey() != null && getAuthServiceSecret() != null;
   }
 
   @Override
   public String getPublicKey() {
-    return redisTemplate.opsForValue().get(PUBLIC_KEY_KEY);
-  }
-
-  @Override
-  public String getPrivateKey() {
-    return redisTemplate.opsForValue().get(PRIVATE_KEY_KEY);
+    return redisTemplate.opsForValue().get(LATEST_PUBLIC_KEY);
   }
 
   @Override
@@ -58,41 +58,42 @@ public class RedisKeyServiceImpl implements RedisKeyService {
   }
 
   @Override
-  public boolean tryAcquire() {
-    return semaphore.tryAcquire();
+  public String getPrivateKey(String publicKey) {
+    return (String) redisTemplate.opsForHash().get(PRIVATE_KEYS_MAP, publicKey);
   }
 
   @Override
-  public void acquire() {
-    try {
-      semaphore.acquire();
-      logger.info("Semaphore acquired");
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException("Error acquiring semaphore", e);
-    }
+  public List<String> getPublicKeys() {
+    List<String> publicKeys = redisTemplate.opsForList().range(PUBLIC_KEYS_LIST, 0, -1);
+    return publicKeys != null ? publicKeys : Collections.emptyList();
   }
 
   @Override
-  public void release() {
-    semaphore.release();
-    logger.info("Semaphore released");
-
-    if (getPublicKey() != null && getAuthServiceSecret() != null) {
-      sendAuthInfoKeys();
-    }
+  public void resetKeys() {
+    redisTemplate.delete(LATEST_PUBLIC_KEY);
+    redisTemplate.delete(AUTH_SECRET_KEY);
+    redisTemplate.delete(PUBLIC_KEYS_LIST);
+    redisTemplate.delete(PRIVATE_KEYS_MAP);
+    logger.info("All keys removed from Redis");
   }
 
-  private void sendAuthInfoKeys() {
-    logger.info("Sending auth info keys");
+  private void trimOldKeys() {
+    Long keyCount = redisTemplate.opsForList().size(PUBLIC_KEYS_LIST);
+    if (keyCount != null && keyCount > MAX_KEYS) {
+      String oldestPublicKey = redisTemplate.opsForList().leftPop(PUBLIC_KEYS_LIST);
+      if (oldestPublicKey != null) {
+        redisTemplate.opsForHash().delete(PRIVATE_KEYS_MAP, oldestPublicKey);
+        logger.info("Removed old public key: {}", oldestPublicKey);
+        logger.info("Removed private key associated with old public key: {}", oldestPublicKey);
+      }
 
-    AuthInfoDto authInfoDto =
-        AuthInfoDto.builder()
-            .publicKey(getPublicKey())
-            .authServiceSecret(getAuthServiceSecret())
-            .build();
-
-    eventProducerService.sendAuthInfoEvent(authInfoDto);
-    logger.info("Sent public key to Kafka: {}", authInfoDto);
+      Long updatedCount = redisTemplate.opsForList().size(PUBLIC_KEYS_LIST);
+      logger.info(
+          "Keys after cleanup: {} public keys in list, {} private keys in map",
+          updatedCount,
+          redisTemplate.opsForHash().size(PRIVATE_KEYS_MAP));
+    } else {
+      logger.info("No cleanup needed, current keys in list: {}", keyCount);
+    }
   }
 }

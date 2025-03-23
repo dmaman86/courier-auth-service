@@ -2,7 +2,6 @@ package com.courier.authservice.service;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -10,10 +9,10 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
-import jakarta.annotation.PostConstruct;
 
 @Service
 public class KeyGeneratorService {
@@ -22,8 +21,10 @@ public class KeyGeneratorService {
 
   @Autowired private RedisKeyService redisKeyService;
 
-  @PostConstruct
+  @EventListener(ApplicationReadyEvent.class)
   public void init() {
+    logger.info("Initializing key generator service");
+    redisKeyService.resetKeys();
     generateKeys();
   }
 
@@ -34,34 +35,43 @@ public class KeyGeneratorService {
   }
 
   private void generateKeys() {
-    if (redisKeyService.tryAcquire()) {
-      try {
 
-        logger.info("Generating keys");
-        KeyPair keyPair = generateKeyPair();
-        String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
-        String privateKey = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-        String authServiceSecret = UUID.randomUUID().toString();
+    CompletableFuture.runAsync(
+            () -> {
+              logger.info("Generating keys");
 
-        redisKeyService.setPublicKey(publicKey);
-        redisKeyService.setPrivateKey(privateKey);
-        redisKeyService.setAuthServiceSecret(authServiceSecret);
+              KeyPair keyPair;
+              String publicKey, privateKey;
+              boolean keysGenerated = false;
 
-        logger.info("Keys generated and saved to redis");
+              while (!keysGenerated) {
+                keyPair = generateKeyPair();
+                publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+                privateKey = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
 
-      } catch (Exception e) {
-        logger.error("Error generating keys: ", e);
-        redisKeyService.release();
-        CompletableFuture.runAsync(() -> generateKeys());
-      } finally {
-        redisKeyService.release();
-      }
-    }
+                if (redisKeyService.getPrivateKey(publicKey) == null) {
+                  keysGenerated = true;
+                  String authServiceSecret = UUID.randomUUID().toString();
+                  redisKeyService.setKeys(privateKey, publicKey, authServiceSecret);
+                  logger.info("New key pair generated and saved to Redis");
+                }
+              }
+            })
+        .thenRun(() -> logger.info("Key generation process completed successfully"))
+        .exceptionally(
+            ex -> {
+              logger.error("Key generation failed: {}", ex.getMessage(), ex);
+              return null;
+            });
   }
 
-  private KeyPair generateKeyPair() throws NoSuchAlgorithmException {
-    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-    keyGen.initialize(2048);
-    return keyGen.generateKeyPair();
+  private KeyPair generateKeyPair() {
+    try {
+      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+      keyPairGenerator.initialize(2048);
+      return keyPairGenerator.generateKeyPair();
+    } catch (Exception e) {
+      throw new RuntimeException("Error generating key pair", e);
+    }
   }
 }

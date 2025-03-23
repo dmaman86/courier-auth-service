@@ -4,7 +4,6 @@ import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -24,11 +23,7 @@ public class BlackListServiceImpl implements BlackListService {
   private static final long EXPIRATION_TIME = 20 * 60 * 1000; // 20 minutes
 
   @Override
-  @KafkaListener(
-      topics = "user-disabled",
-      groupId = "auth-service-group",
-      containerFactory = "longKafkaListenerContainerFactory")
-  public void handleUserDisabledEvent(Long userId) {
+  public void setUserId(Long userId) {
     long currentTime = System.currentTimeMillis();
 
     redisTemplate
@@ -59,7 +54,7 @@ public class BlackListServiceImpl implements BlackListService {
   }
 
   @Override
-  public boolean isUserBlackListed(Long userId) {
+  public boolean isUserInBlackList(Long userId) {
     return redisTemplate.hasKey(BLACKLIST_PREFIX + userId.toString());
   }
 }

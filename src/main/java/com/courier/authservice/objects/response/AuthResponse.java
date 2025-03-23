@@ -1,4 +1,6 @@
-package com.courier.authservice.objects.dto;
+package com.courier.authservice.objects.response;
+
+import com.courier.authservice.objects.dto.UserDto;
 
 import jakarta.servlet.http.Cookie;
 import lombok.AllArgsConstructor;
@@ -14,4 +16,5 @@ public class AuthResponse {
 
   private Cookie accessTokenCookie;
   private Cookie refreshTokenCookie;
+  private UserDto user;
 }

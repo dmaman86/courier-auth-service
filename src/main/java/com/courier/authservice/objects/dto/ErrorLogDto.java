@@ -1,6 +1,5 @@
 package com.courier.authservice.objects.dto;
 
-import java.time.LocalDateTime;
 
 import com.courier.authservice.objects.enums.ErrorSeverity;
 
@@ -13,7 +12,7 @@ import lombok.Data;
 @Builder
 public class ErrorLogDto {
 
-  private LocalDateTime timestamp;
+  private String timestamp;
   private int status;
   private String error;
   private String message;

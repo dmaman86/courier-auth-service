@@ -94,4 +94,110 @@ public class CustomUserDetails implements UserDetails {
   public String getFullName() {
     return fullName;
   }
+
+  @Override
+  public String toString() {
+    return "CustomUserDetails{"
+        + "id="
+        + id
+        + ", fullName='"
+        + fullName
+        + '\''
+        + ", email='"
+        + email
+        + '\''
+        + ", phoneNumber='"
+        + phoneNumber
+        + '\''
+        + ", roles="
+        + authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList())
+        + ", enabled="
+        + enabled
+        + '}';
+  }
 }
+
+// public class CustomUserDetails implements UserDetails {
+//
+//   private UserDto user;
+//   private String password;
+//   private boolean enabled;
+//
+//   public CustomUserDetails(UserDto user, UserCredential userCredential) {
+//     this.user = user;
+//     this.password = userCredential.getPassword();
+//     this.enabled = userCredential.isEnabled();
+//   }
+//
+//   public CustomUserDetails(UserDto user) {
+//     this.user = user;
+//     this.password = null;
+//     this.enabled = true;
+//   }
+//
+//   @Override
+//   public Collection<? extends GrantedAuthority> getAuthorities() {
+//     return user.getRoles().stream()
+//         .map(role -> new SimpleGrantedAuthority(role.getName()))
+//         .collect(Collectors.toList());
+//   }
+//
+//   @Override
+//   public String getPassword() {
+//     return password;
+//   }
+//
+//   @Override
+//   public String getUsername() {
+//     return user.getEmail();
+//   }
+//
+//   @Override
+//   public boolean isAccountNonExpired() {
+//     return true;
+//   }
+//
+//   @Override
+//   public boolean isAccountNonLocked() {
+//     return enabled;
+//   }
+//
+//   @Override
+//   public boolean isCredentialsNonExpired() {
+//     return true;
+//   }
+//
+//   @Override
+//   public boolean isEnabled() {
+//     return enabled;
+//   }
+//
+//   public UserDto getUser() {
+//     return user;
+//   }
+//
+//   public Long getId() {
+//     return user.getId();
+//   }
+//
+//   public String getPhoneNumber() {
+//     return user.getPhoneNumber();
+//   }
+//
+//   public String getFullName() {
+//     return user.getFullName();
+//   }
+//
+//   @Override
+//   public String toString() {
+//     return "CustomUserDetails{" +
+//            "id=" + user.getId() +
+//            ", fullName='" + user.getFullName() + '\'' +
+//            ", email='" + user.getEmail() + '\'' +
+//            ", phoneNumber='" + user.getPhoneNumber() + '\'' +
+//            ", roles=" +
+// user.getRoles().stream().map(RoleDto::getName).collect(Collectors.toList()) +
+//            ", enabled=" + enabled +
+//            '}';
+//   }
+// }
